@@ -1,0 +1,58 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Page-1" id="a8tWWfeHvYW0q8EbDflc">
+    <mxGraphModel dx="1471" dy="917" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="officer" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Council Officer&#xa;(amendments, audit)" vertex="1">
+          <mxGeometry height="70" width="200" x="10" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="candidate" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Candidate&#xa;(web, 2G, USSD or SMS)" vertex="1">
+          <mxGeometry height="70" width="200" x="10" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="employer" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Employer / University&#xa;(via Employers&#39; Association,&#xa;machine to machine)" vertex="1">
+          <mxGeometry height="80" width="200" x="10" y="544" as="geometry" />
+        </mxCell>
+        <mxCell id="takarda" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=16;fontStyle=1" value="Takarda Results Platform" vertex="1">
+          <mxGeometry height="140" width="280" x="420" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="payment" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" value="Payment Partner&#xa;(charges PIN purchases,&#xa;no idempotency key)" vertex="1">
+          <mxGeometry height="80" width="220" x="900" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="gateway" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" value="SMS / USSD Gateway&#xa;(telco)" vertex="1">
+          <mxGeometry height="70" width="220" x="900" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="officer" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;" target="takarda" value="records amendment, audits history">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="candidate" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;" target="takarda" value="checks result, buys PIN">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="school" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;" target="takarda" value="downloads full result export">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="employer" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;" target="takarda" value="verifies certificate">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="takarda" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;" target="payment" value="charges card at PIN issuance">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="takarda" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;" target="gateway" value="sends and receives USSD / SMS">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="school" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;dashed=1;" target="candidate" value="delivers result to phone">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="L-RjANMQfadeANgWLMOY-2" edge="1" parent="1" source="gateway" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;dashed=1;" target="school" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="900" y="455" as="sourcePoint" />
+            <mxPoint x="110" y="250" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="school" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="School&#xa;(one of 21,000)" vertex="1">
+          <mxGeometry height="70" width="200" x="10" y="330" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

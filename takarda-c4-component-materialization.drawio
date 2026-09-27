@@ -1,0 +1,73 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Page-1" id="a8tWWfeHvYW0q8EbDflc">
+    <mxGraphModel dx="1471" dy="917" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="evtstore" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="Event Store&#xa;(from Container diagram)" vertex="1">
+          <mxGeometry height="90" width="220" x="40" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="lock" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="Sitting Lock Trigger&#xa;(marks a sitting ready&#xa;at the cutoff)" vertex="1">
+          <mxGeometry height="90" width="220" x="340" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="worker" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1" value="Materialization Worker Pool&#xa;(computes each candidate&#39;s&#xa;current value)" vertex="1">
+          <mxGeometry height="100" width="220" x="340" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="health" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" value="Materialization Health Monitor&#xa;(tracks batch build progress,&#xa;alerts if behind schedule)" vertex="1">
+          <mxGeometry height="90" width="220" x="340" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="amendlistener" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="Amendment Listener&#xa;(re-materializes one candidate&#xa;the moment an amendment lands)" vertex="1">
+          <mxGeometry height="90" width="220" x="40" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="cachestore" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="Read Cache Store" vertex="1">
+          <mxGeometry height="90" width="220" x="660" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="cdn" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="CDN / Edge Layer" vertex="1">
+          <mxGeometry height="90" width="220" x="960" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="candidateapi" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Candidate Web / API Gateway&#xa;(from Container diagram)" vertex="1">
+          <mxGeometry height="80" width="220" x="960" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="schoolexp" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="School Export Service&#xa;(from Container diagram)" vertex="1">
+          <mxGeometry height="80" width="220" x="960" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="verifyapi" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Verification API&#xa;(from Container diagram)" vertex="1">
+          <mxGeometry height="80" width="220" x="960" y="460" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="evtstore" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="lock" value="marks sitting ready">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="lock" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="worker" value="starts full batch build">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="evtstore" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="worker" value="reads results + amendments">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="worker" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="cachestore" value="writes computed values">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="worker" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="health" value="reports progress">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="cachestore" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="cdn" value="publishes to edge">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="cdn" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="candidateapi" value="serves reads">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="cdn" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="schoolexp" value="serves reads">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="cdn" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="verifyapi" value="serves reads">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="evtstore" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="amendlistener" value="new amendment event">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="amendlistener" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="cachestore" value="incremental update, one candidate">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

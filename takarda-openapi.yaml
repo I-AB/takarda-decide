@@ -1,0 +1,553 @@
+openapi: 3.1.0
+info:
+  title: Takarda Results Platform API
+  version: "1.0.0"
+  description: >
+    API contract for the Takarda Results Platform, serving the National
+    Secondary Certificate Council. Covers candidate result checks and PIN
+    purchase, school bulk exports, employer/university certificate
+    verification, and the officer-facing amendment and audit endpoints.
+    See Part C of the decision dossier for the reasoning behind each
+    design choice referenced in this file's descriptions.
+  contact:
+    name: Takarda Engineering
+
+servers:
+  - url: https://api.takarda.ng/v1
+    description: Production (version 1)
+
+tags:
+  - name: pin-purchases
+    description: Candidate PIN purchase and payment reconciliation (ADR-004, Part C.3)
+  - name: result-checks
+    description: Candidate result checks (FR-1)
+  - name: school-exports
+    description: School bulk result export (FR-3, ADR-008)
+  - name: verification
+    description: Employer/university certificate verification (FR-4, ADR-007)
+  - name: amendments
+    description: Officer-facing amendment workflow (FR-5, ADR-002)
+  - name: results
+    description: Point-in-time result and audit reads
+
+paths:
+  /pin-purchases:
+    post:
+      tags: [pin-purchases]
+      summary: Initiate a PIN purchase
+      description: >
+        Creates a pending purchase record and a unique purchase_reference
+        BEFORE the payment partner is called (FR-2.1, ADR-004). Not safe
+        (creates a record and triggers a charge). Idempotent when an
+        Idempotency-Key header is supplied: a repeated request with the
+        same key returns the existing purchase rather than creating a
+        second one, protecting against a candidate's own client retrying
+        a failed network call. This is separate from, and in addition to,
+        the reconciliation job that catches the payment partner charging
+        twice on its own side (Part C.3).
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: >
+            Optional client-supplied key. A repeated request with the same
+            key within 24 hours returns the original purchase record
+            instead of creating a new one.
+          schema:
+            type: string
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount_kobo, channel]
+              properties:
+                amount_kobo:
+                  type: integer
+                  const: 350000
+                  description: Fixed PIN price in kobo (3,500 naira). Any other value is rejected.
+                channel:
+                  type: string
+                  enum: [web, bank, agent, ussd]
+                  description: How the purchase was initiated; determines PIN delivery channel (FR-2.6).
+                agent_id:
+                  type: string
+                  description: Required when channel is "bank" or "agent"; identifies the licensed agent or bank integration.
+      responses:
+        "202":
+          description: >
+            Purchase accepted and pending_charge. The candidate polls
+            GET /pin-purchases/{reference} for the outcome; a PIN is not
+            issued in this response (FR-2.1).
+          headers:
+            Location:
+              description: URL of the created purchase resource for polling.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PinPurchase"
+        "400":
+          description: Malformed request (wrong amount_kobo, missing required field).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /pin-purchases/{reference}:
+    get:
+      tags: [pin-purchases]
+      summary: Get PIN purchase status
+      description: Safe, idempotent status read. Poll this until state is pin_issued, charge_failed, or not_charged_by_reconciliation.
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: The purchase_reference returned by POST /pin-purchases.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Current purchase state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PinPurchase"
+        "404":
+          description: No purchase found for this reference.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /result-checks:
+    post:
+      tags: [result-checks]
+      summary: Check a candidate's result and consume one PIN use
+      description: >
+        Not safe: this decrements the PIN's remaining-checks count as a
+        side effect (FR-1.1), even though it is conceptually a "read" from
+        the candidate's point of view. Deliberately NOT idempotent:
+        repeating the same request consumes another PIN use. Both an
+        unknown examination_number (FR-1.3) and an invalid pin (FR-1.4)
+        return the identical 404 body, by design, so a caller cannot use
+        the response to tell which part of a guess was closer to correct.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [examination_number, pin]
+              properties:
+                examination_number:
+                  type: string
+                pin:
+                  type: string
+                  description: The 10-digit PIN purchased by the candidate.
+      responses:
+        "200":
+          description: Result returned; PIN's remaining count decremented by one.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResultCheck"
+        "404":
+          description: >
+            Generic "check could not be completed": covers both an
+            unrecognized examination_number and an invalid pin, with the
+            same body, to prevent enumeration (FR-1.3, FR-1.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: >
+            The sitting's results-day cache has not been built yet
+            (FR-1.6). 425 was considered and rejected: it is specific to
+            TLS 0-RTT replay protection, not general availability timing
+            (verified against the HTTP specification; see Part C.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: PIN is valid but exhausted (FR-1.2). Safe to be specific here, since the candidate already knows their own PIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /schools/{school_id}/exports:
+    post:
+      tags: [school-exports]
+      security:
+        - schoolApiKey: []
+      summary: Request (or retrieve) a school's result export for a sitting
+      description: >
+        Not safe (triggers a batch job against the materialized cache,
+        ADR-008). Idempotent by the natural key (school_id, sitting_id):
+        a repeated request for a sitting already exported returns the
+        existing export rather than starting a second job (FR-3.4).
+      parameters:
+        - name: school_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sitting_id
+          in: query
+          required: true
+          description: Which examination sitting to export.
+          schema:
+            type: string
+        - name: snapshot
+          in: query
+          required: false
+          description: >
+            When set to "noon", returns the export as it stood at the
+            noon release rather than including amendments finalized
+            since (FR-3.4). Default behavior includes current amendments.
+          schema:
+            type: string
+            enum: [noon]
+      responses:
+        "202":
+          description: Export accepted or already in progress/complete; poll the export resource for status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchoolExport"
+
+  /schools/{school_id}/exports/{export_id}:
+    get:
+      tags: [school-exports]
+      security:
+        - schoolApiKey: []
+      summary: Get export status and, once ready, its download URL
+      description: >
+        Safe, idempotent. The export itself is delivered as a static file
+        from the CDN/edge layer with HTTP range-request support for
+        resumable downloads (Part C.1), not as a paginated API response.
+      parameters:
+        - name: school_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: export_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Current export status, and download_url once ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchoolExport"
+        "404":
+          description: No such export for this school.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /verifications:
+    post:
+      tags: [verification]
+      security:
+        - employerMutualTLS: []
+      summary: Verify one certificate
+      description: >
+        Technically safe and idempotent (no server-side state change),
+        but deliberately uses POST rather than GET with query parameters:
+        date_of_birth must never appear in a URL, query string, or any
+        log outside Takarda's control (CDN, proxy, browser history).
+        Returns only the DPO-approved field list (ADR-007, FR-4.1); no
+        other candidate field is ever present on this resource's schema.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [certificate_number, date_of_birth]
+              properties:
+                certificate_number:
+                  type: string
+                date_of_birth:
+                  type: string
+                  format: date
+      responses:
+        "200":
+          description: Certificate verified.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificationResult"
+        "404":
+          description: >
+            Generic "not_verified": covers both a non-matching
+            certificate_number and a non-matching date_of_birth, with the
+            same body, so neither field can be enumerated (FR-4.2).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Association's contracted monthly rate exceeded; request still served, account flagged for billing review, not rejected (FR-4.4, an assumption not stated in the brief).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificationResult"
+
+  /results/{result_id}:
+    get:
+      tags: [results]
+      security:
+        - officerAuth: []
+      summary: Get a result, optionally as it stood on a past date
+      description: >
+        Safe, idempotent. as_of is a view-modifying query parameter, not
+        an identifier: it changes which historical state of the same
+        resource is returned by folding the base result with every
+        amendment event finalized on or before that date (ADR-002,
+        FR-5.3). Omitting as_of returns current state.
+      parameters:
+        - name: result_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: as_of
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Result at the requested (or current) point in time.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+        "404":
+          description: No such result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /results/{result_id}/amendments:
+    post:
+      tags: [amendments]
+      security:
+        - officerAuth: []
+      summary: Record an amendment to a result
+      description: >
+        Not safe: writes a new, permanent, immutable event (ADR-002); the
+        original result is never modified or deleted (FR-5.1). Idempotent
+        via Idempotency-Key: protects an officer's retry from creating a
+        duplicate amendment for the same correction, while still allowing
+        two genuinely separate amendments of the same result to stand as
+        separate events.
+      parameters:
+        - name: result_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_value, reason, evidence_reference]
+              properties:
+                new_value:
+                  type: string
+                reason:
+                  type: string
+                  enum: [remark, appeal, correction_of_prior_amendment]
+                evidence_reference:
+                  type: string
+                  description: Reference to the supporting evidence for this amendment.
+      responses:
+        "201":
+          description: Amendment event recorded; materialized cache re-computation triggered for this candidate (ADR-001/003, FR-5.2).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Amendment"
+        "404":
+          description: No such result to amend.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  securitySchemes:
+    schoolApiKey:
+      type: http
+      scheme: bearer
+      description: Issued API key per school (ADR-005, Part C.2). Standard server-only TLS.
+    employerMutualTLS:
+      type: mutualTLS
+      description: Client certificate issued to the Employers' Association under the national contract (ADR-005, Part C.2).
+    officerAuth:
+      type: http
+      scheme: bearer
+      description: Officer account session token (login plus MFA); standard server-only TLS.
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+    PinPurchase:
+      type: object
+      properties:
+        purchase_reference:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum:
+            - pending_charge
+            - confirmed
+            - pin_issued
+            - charge_failed
+            - pending_verification
+            - confirmed_by_reconciliation
+            - not_charged_by_reconciliation
+        amount_kobo:
+          type: integer
+        pin:
+          type: string
+          description: Present only once state is pin_issued.
+        refund_issued:
+          type: boolean
+          description: True if the reconciliation job detected and refunded a duplicate charge against this reference (Part C.3).
+
+    ResultCheck:
+      type: object
+      properties:
+        examination_number:
+          type: string
+        sitting:
+          type: string
+        subjects:
+          type: array
+          items:
+            type: object
+            properties:
+              subject:
+                type: string
+              grade:
+                type: string
+        pin_checks_remaining:
+          type: integer
+
+    SchoolExport:
+      type: object
+      properties:
+        export_id:
+          type: string
+        school_id:
+          type: string
+        sitting_id:
+          type: string
+        state:
+          type: string
+          enum: [pending, building, ready, not_yet_available]
+        download_url:
+          type: string
+          description: Present once state is ready; supports HTTP range requests for resumable download (Part C.1).
+
+    VerificationResult:
+      type: object
+      description: Contains ONLY the DPO-approved fields (ADR-007). No other candidate field exists on this schema.
+      properties:
+        name:
+          type: string
+        examination_number:
+          type: string
+        sitting:
+          type: string
+        subjects_and_grades:
+          type: array
+          items:
+            type: object
+            properties:
+              subject:
+                type: string
+              grade:
+                type: string
+        certificate_validity_status:
+          type: string
+          enum: [valid, amended_since_issue, not_verified]
+
+    Amendment:
+      type: object
+      properties:
+        amendment_id:
+          type: string
+        result_id:
+          type: string
+        officer_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        previous_value:
+          type: string
+        new_value:
+          type: string
+        evidence_reference:
+          type: string
+
+    Result:
+      type: object
+      properties:
+        result_id:
+          type: string
+        examination_number:
+          type: string
+        sitting:
+          type: string
+        as_of:
+          type: string
+          format: date
+          description: Echoes the requested reconstruction date, or "current" if omitted.
+        subjects:
+          type: array
+          items:
+            type: object
+            properties:
+              subject:
+                type: string
+              grade:
+                type: string
+        amendment_history:
+          type: array
+          items:
+            $ref: "#/components/schemas/Amendment"
